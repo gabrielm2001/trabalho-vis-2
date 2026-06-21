@@ -3,7 +3,7 @@ import { grafico2 } from "./grafico2.js";
 import { grafico3 } from "./grafico3.js";
 import { grafico4 } from "./grafico4.js";
 import { initializeDatabase, executeQuery } from "./dataLoader.js";
-import { filterState, updateFilter } from "./filterState.js";
+import { filterState, updateFilter, onFilterChange } from "./filterState.js";
 import { populateCountryNames, getName } from "./countryNames.js";
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -11,9 +11,21 @@ document.addEventListener("DOMContentLoaded", () => {
   const progressBar = document.getElementById("progressBar");
   const progressText = document.getElementById("progressText");
 
-  async function refreshProductOptions(year) {
+  let productOptionsRequestId = 0;
+
+  function escapeSql(value) {
+    return String(value).replace(/'/g, "''");
+  }
+
+  async function refreshProductOptions() {
+    const requestId = ++productOptionsRequestId;
     const productSel = document.getElementById("filter-product");
     const current = filterState.product;
+    const { year, country } = filterState;
+
+    const countryFilter = country === "ALL"
+      ? ""
+      : `AND countryiso3 = '${escapeSql(country)}'`;
 
     const products = await executeQuery(
       `SELECT DISTINCT commodity
@@ -21,10 +33,27 @@ document.addEventListener("DOMContentLoaded", () => {
        WHERE category NOT IN ('non-food')
          AND usdprice > 0
          AND CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) = ${year}
+         ${countryFilter}
        ORDER BY commodity`
     );
 
+    if (requestId !== productOptionsRequestId) return;
+
     productSel.innerHTML = "";
+
+    if (!products.length) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "Sem alimentos disponíveis";
+      opt.disabled = true;
+      opt.selected = true;
+      productSel.appendChild(opt);
+      productSel.disabled = true;
+      return;
+    }
+
+    productSel.disabled = false;
+
     let found = false;
     products.forEach((r) => {
       const opt = document.createElement("option");
@@ -37,22 +66,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!found && products.length) {
       productSel.value = products[0].commodity;
       updateFilter({ product: products[0].commodity });
+      return;
     }
   }
 
   async function populateFilters() {
-    const [years, products, countries] = await Promise.all([
+    const [years, countries] = await Promise.all([
       executeQuery(
         `SELECT DISTINCT CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) AS year
          FROM wfp ORDER BY year`
-      ),
-      executeQuery(
-        `SELECT DISTINCT commodity
-         FROM wfp
-         WHERE category NOT IN ('non-food')
-           AND usdprice > 0
-           AND CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) = ${filterState.year}
-         ORDER BY commodity`
       ),
       executeQuery(
         `SELECT DISTINCT countryiso3
@@ -61,6 +83,7 @@ document.addEventListener("DOMContentLoaded", () => {
     ]);
 
     const yearSel = document.getElementById("filter-year");
+    yearSel.innerHTML = "";
     years.forEach((r) => {
       const opt = document.createElement("option");
       opt.value = r.year;
@@ -70,21 +93,12 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     const productSel = document.getElementById("filter-product");
-    let productFound = false;
-    products.forEach((r) => {
-      const opt = document.createElement("option");
-      opt.value = r.commodity;
-      opt.textContent = r.commodity;
-      if (r.commodity === filterState.product) { opt.selected = true; productFound = true; }
-      productSel.appendChild(opt);
-    });
-    if (!productFound && products.length) {
-      productSel.value = products[0].commodity;
-      updateFilter({ product: products[0].commodity });
-    }
+    productSel.innerHTML = "";
+    productSel.disabled = false;
 
     // Dropdown de países: ordenar por nome completo
     const countrySel = document.getElementById("filter-country");
+    countrySel.innerHTML = '<option value="ALL">Todos os países</option>';
     const countryOpts = countries
       .map((r) => ({ iso3: r.countryiso3, name: getName(r.countryiso3) }))
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -99,7 +113,6 @@ document.addEventListener("DOMContentLoaded", () => {
     yearSel.addEventListener("change", async (e) => {
       const year = Number(e.target.value);
       updateFilter({ year });
-      await refreshProductOptions(year);
     });
     productSel.addEventListener("change", (e) =>
       updateFilter({ product: e.target.value })
@@ -107,6 +120,12 @@ document.addEventListener("DOMContentLoaded", () => {
     countrySel.addEventListener("change", (e) =>
       updateFilter({ country: e.target.value })
     );
+
+    onFilterChange(["year", "country", "yearStart", "yearEnd", "countryB"], async () => {
+      await refreshProductOptions();
+    });
+
+    await refreshProductOptions();
   }
 
   async function main() {
