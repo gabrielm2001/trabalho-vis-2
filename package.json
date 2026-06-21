@@ -1,0 +1,19 @@
+{
+  "name": "trabalho-vis",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "description": "",
+  "dependencies": {
+    "@duckdb/duckdb-wasm": "^1.29.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}

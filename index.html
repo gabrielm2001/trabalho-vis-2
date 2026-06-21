@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WFP — Preços Globais de Alimentos e Insumos</title>
+    <link rel="stylesheet" href="index.css" />
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+  </head>
+  <body>
+    <div id="loadingOverlay">
+      <div class="spinner"></div>
+      <div id="progressContainer">
+        <div id="progressBar"></div>
+      </div>
+      <div id="progressText">Carregando dados...</div>
+    </div>
+
+    <div class="container">
+      <h1>Preços Globais de Alimentos e Insumos — WFP 2015–2026</h1>
+
+      <!-- Filtros Globais -->
+      <div id="filter-bar">
+        <div class="filter-group">
+          <label for="filter-year">Ano de referência</label>
+          <select id="filter-year"></select>
+        </div>
+        <div class="filter-group">
+          <label for="filter-product">Produto (alimento)</label>
+          <select id="filter-product"></select>
+        </div>
+        <div class="filter-group">
+          <label for="filter-country">País A (referência)</label>
+          <select id="filter-country">
+            <option value="ALL">Todos os países</option>
+          </select>
+        </div>
+        <div class="filter-group filter-info">
+          <span id="selected-country-label">Clique no mapa para selecionar País B (comparação)</span>
+        </div>
+      </div>
+
+      <!-- Gráfico 1: Mapa Mundial -->
+      <div class="chart" id="chart1">
+        <h2>1. Preço Médio por País (USD) — Produto e Ano Selecionados</h2>
+        <div id="worldmap"></div>
+      </div>
+
+      <!-- Gráfico 2: Evolução de Alimentos -->
+      <div class="chart" id="chart2">
+        <h2>2. Evolução do Preço de Alimentos ao Longo do Tempo</h2>
+        <svg></svg>
+        <div id="brush-info-food"></div>
+      </div>
+
+      <!-- Gráficos 3 e 4 lado a lado -->
+      <div class="containerg34">
+        <div id="chart3" class="chart">
+          <h2>3. Evolução de Combustíveis e Insumos Agrícolas (Non-Food)</h2>
+          <svg></svg>
+        </div>
+        <div class="chart" id="chart4">
+          <h2>4. Comparativo: País A vs País B</h2>
+          <svg></svg>
+        </div>
+      </div>
+
+      <!-- Details on Demand -->
+      <div id="details-panel" class="chart">
+        <h3>Detalhes do Ponto Selecionado</h3>
+        <div id="details-content">
+          <p class="details-placeholder">Clique em um ponto nos gráficos para ver os detalhes.</p>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>

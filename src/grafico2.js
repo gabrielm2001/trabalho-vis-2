@@ -1,0 +1,177 @@
+import { executeQuery } from "./dataLoader.js";
+import { filterState, updateFilter, onFilterChange } from "./filterState.js";
+
+async function loadData() {
+  const { country, product } = filterState;
+  const safe = product.replace(/'/g, "''");
+  const cf = country === "ALL" ? "" : `AND countryiso3 = '${country}'`;
+  return await executeQuery(`
+    SELECT CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) AS year,
+           ROUND(AVG(usdprice), 4)   AS avg_price,
+           CAST(COUNT(*) AS INTEGER)  AS records,
+           MAX(unit)                  AS unit
+    FROM wfp
+    WHERE category NOT IN ('non-food')
+      AND commodity = '${safe}'
+      ${cf}
+      AND usdprice > 0
+    GROUP BY year
+    ORDER BY year
+  `);
+}
+
+function showDetails(d) {
+  const panel = document.getElementById("details-panel");
+  const content = document.getElementById("details-content");
+  panel.style.display = "block";
+  content.innerHTML = `
+    <table class="details-table">
+      <tr><th>Ano</th><td>${d.year}</td></tr>
+      <tr><th>Produto</th><td>${filterState.product}</td></tr>
+      <tr><th>País</th><td>${filterState.country === "ALL" ? "Todos" : filterState.country}</td></tr>
+      <tr><th>Preço médio (USD)</th><td>$${(+d.avg_price).toFixed(4)}</td></tr>
+      <tr><th>Unidade</th><td>${d.unit || "—"}</td></tr>
+      <tr><th>Registros</th><td>${d.records?.toLocaleString()}</td></tr>
+    </table>`;
+}
+
+// Marcos históricos para anotação no gráfico
+const CRISES = [
+  { year: 2019, label: "COVID-19 (início)" },
+  { year: 2021, label: "Pós-COVID / Guerra UKR" },
+  { year: 2022, label: "Crise energética" },
+  { year: 2026, label: "Tensões Oriente Médio" },
+];
+
+async function render() {
+  const data = await loadData();
+  const svg = d3.select("#chart2 svg");
+  svg.selectAll("*").remove();
+
+  const margin = { top: 30, right: 40, bottom: 50, left: 75 };
+  const totalW = svg.node().getBoundingClientRect().width || 800;
+  const W = totalW - margin.left - margin.right;
+  const H = 360 - margin.top - margin.bottom;
+
+  svg.attr("width", totalW).attr("height", H + margin.top + margin.bottom);
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  if (!data.length) {
+    g.append("text").attr("x", W / 2).attr("y", H / 2)
+      .attr("text-anchor", "middle").style("fill", "#aaa")
+      .text("Sem dados para o produto/país selecionado");
+    return;
+  }
+
+  const xScale = d3.scaleLinear().domain(d3.extent(data, (d) => d.year)).range([0, W]);
+  const yScale = d3.scaleLinear()
+    .domain([0, d3.max(data, (d) => +d.avg_price) * 1.12])
+    .nice().range([H, 0]);
+
+  // Grade horizontal
+  g.append("g").attr("class", "grid")
+    .call(d3.axisLeft(yScale).ticks(5).tickSize(-W).tickFormat(""))
+    .call((gg) => gg.select(".domain").remove())
+    .selectAll("line").style("stroke", "#f0f0f0");
+
+  // Anotações de crise
+  const [yMin, yMax] = xScale.domain();
+  CRISES.forEach((c) => {
+    if (c.year < yMin || c.year > yMax) return;
+    g.append("line")
+      .attr("x1", xScale(c.year)).attr("x2", xScale(c.year))
+      .attr("y1", 0).attr("y2", H)
+      .attr("stroke", "#e63946").attr("stroke-dasharray", "4,3")
+      .attr("stroke-width", 1).attr("opacity", 0.5);
+    g.append("text")
+      .attr("x", xScale(c.year) + 4).attr("y", 13)
+      .style("font-size", "9px").style("fill", "#e63946").style("opacity", 0.75)
+      .text(c.label);
+  });
+
+  // Eixos
+  g.append("g").attr("transform", `translate(0,${H})`)
+    .call(d3.axisBottom(xScale).tickFormat(d3.format("d"))).attr("class", "x-axis");
+  g.append("g").call(d3.axisLeft(yScale).tickFormat((v) => `$${v}`)).attr("class", "y-axis");
+
+  // Labels
+  g.append("text").attr("transform", "rotate(-90)")
+    .attr("y", -margin.left + 15).attr("x", -H / 2)
+    .attr("dy", "1em").style("text-anchor", "middle").style("font-size", "12px")
+    .text("Preço Médio (USD)");
+  g.append("text")
+    .attr("transform", `translate(${W / 2},${H + margin.bottom - 6})`)
+    .style("text-anchor", "middle").style("font-size", "12px").text("Ano");
+
+  // Linha
+  const line = d3.line().x((d) => xScale(d.year)).y((d) => yScale(+d.avg_price)).curve(d3.curveMonotoneX);
+  g.append("path").datum(data)
+    .attr("fill", "none").attr("stroke", "#2d7d2d").attr("stroke-width", 2.5)
+    .attr("class", "food-line").attr("d", line);
+
+  // Tooltip
+  const tooltip = d3.select("body").selectAll(".tooltip-food").data([null]).join("div")
+    .attr("class", "tooltip-food")
+    .style("position", "absolute").style("padding", "10px 13px")
+    .style("background", "#fff").style("border", "1px solid #ccc")
+    .style("border-radius", "6px").style("font-size", "13px")
+    .style("pointer-events", "none").style("opacity", 0)
+    .style("box-shadow", "0 4px 10px rgba(0,0,0,.12)");
+
+  // Pontos
+  g.selectAll(".dot").data(data).enter().append("circle")
+    .attr("class", "dot")
+    .attr("cx", (d) => xScale(d.year))
+    .attr("cy", (d) => yScale(+d.avg_price))
+    .attr("r", 5)
+    .attr("fill", (d) => (Number(d.year) === filterState.year ? "#e63946" : "#2d7d2d"))
+    .attr("stroke", "#fff").attr("stroke-width", 1.5)
+    .style("cursor", "pointer")
+    .on("mouseover", function (event, d) {
+      d3.select(this).attr("r", 7).attr("fill", "#e8a838");
+      tooltip.style("opacity", 1)
+        .html(
+          `<strong>${d.year}</strong>${Number(d.year) === filterState.year ? " <span style='color:#e63946'>◀ selecionado</span>" : ""}<br>
+           Preço médio: <strong>USD ${(+d.avg_price).toFixed(4)}</strong><br>
+           Unidade: ${d.unit || "—"} &nbsp;|&nbsp; Registros: ${d.records?.toLocaleString()}`
+        )
+        .style("left", `${event.pageX + 12}px`)
+        .style("top", `${event.pageY - 36}px`);
+    })
+    .on("mousemove", (event) => {
+      tooltip.style("left", `${event.pageX + 12}px`).style("top", `${event.pageY - 36}px`);
+    })
+    .on("mouseout", function (event, d) {
+      d3.select(this).attr("r", 5).attr("fill", Number(d.year) === filterState.year ? "#e63946" : "#2d7d2d");
+      tooltip.style("opacity", 0);
+    })
+    .on("click", (event, d) => {
+      showDetails(d);
+      updateFilter({ year: Number(d.year) });
+    });
+
+  // Brush → atualiza yearStart/yearEnd para gráficos 3 e 4
+  const brushInfo = d3.select("#brush-info-food");
+  const brush = d3.brushX()
+    .extent([[0, 0], [W, H]])
+    .on("end", function (event) {
+      if (!event.selection) {
+        brushInfo.style("display", "none");
+        const allYears = data.map((d) => d.year);
+        updateFilter({ yearStart: d3.min(allYears), yearEnd: d3.max(allYears) });
+        return;
+      }
+      const [x0, x1] = event.selection.map(xScale.invert);
+      const ys = Math.round(x0), ye = Math.round(x1);
+      brushInfo.style("display", "block")
+        .html(`<strong>Período selecionado:</strong> ${ys} – ${ye} &nbsp;(Gráficos 3 e 4 filtrados)`);
+      updateFilter({ yearStart: ys, yearEnd: ye });
+    });
+
+  g.append("g").attr("class", "brush").call(brush);
+}
+
+export async function grafico2() {
+  await render();
+  onFilterChange(["year", "country", "product"], async () => await render());
+}

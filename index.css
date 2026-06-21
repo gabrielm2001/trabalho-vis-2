@@ -1,0 +1,270 @@
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  padding: 0;
+  background: #f0f4f0;
+}
+
+.container {
+  padding: 2rem;
+  max-width: 1280px;
+  margin: auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+h1 {
+  font-size: 1.6rem;
+  color: #2d7d2d;
+  margin-bottom: 1.2rem;
+  border-left: 5px solid #2d7d2d;
+  padding-left: 0.8rem;
+}
+
+h2 {
+  font-size: 1rem;
+  color: #333;
+  margin: 0 0 0.8rem 0;
+}
+
+h3 {
+  font-size: 0.95rem;
+  color: #555;
+  margin: 0 0 0.6rem 0;
+}
+
+/* ── Filtros Globais ─────────────────────────────────── */
+#filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2rem;
+  align-items: flex-end;
+  background: #fff;
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+  margin-bottom: 1.6rem;
+  box-shadow: 0 1px 6px rgba(0,0,0,.08);
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.filter-group select {
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  padding: 5px 10px;
+  font-size: 13px;
+  background: #fafafa;
+  cursor: pointer;
+  min-width: 160px;
+}
+
+.filter-group select:focus {
+  outline: 2px solid #2d7d2d;
+  border-color: #2d7d2d;
+}
+
+.filter-info {
+  align-self: center;
+  margin-left: auto;
+}
+
+#selected-country-label {
+  font-size: 13px;
+  color: #e63946;
+  font-weight: 600;
+  padding: 6px 10px;
+  background: #fff5f5;
+  border: 1px solid #e63946;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+
+/* ── Cartões de Gráfico ──────────────────────────────── */
+.chart {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 8px rgba(0,0,0,.08);
+  padding: 1.2rem;
+  margin-bottom: 1.6rem;
+}
+
+/* ── Loading Overlay ─────────────────────────────────── */
+#loadingOverlay {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  background: rgba(255,255,255,.92);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.spinner {
+  width: 52px;
+  height: 52px;
+  border: 6px solid #ddd;
+  border-top: 6px solid #2d7d2d;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+#progressContainer {
+  width: 320px;
+  height: 14px;
+  background: #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: .5rem;
+}
+
+#progressBar {
+  width: 0%;
+  height: 100%;
+  background: #2d7d2d;
+  transition: width .3s ease;
+}
+
+#progressText {
+  font-size: 1rem;
+  color: #555;
+}
+
+/* ── Mapa ────────────────────────────────────────────── */
+#chart1 {
+  width: 100%;
+}
+
+#worldmap svg {
+  width: 100%;
+  height: 500px;
+  display: block;
+}
+
+/* ── Gráfico 2 ───────────────────────────────────────── */
+#chart2 {
+  width: 100%;
+}
+
+#chart2 svg {
+  width: 100%;
+  display: block;
+}
+
+#brush-info-food {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #2d7d2d;
+  display: none;
+  padding: 6px 10px;
+  background: #f0f8f0;
+  border-left: 3px solid #2d7d2d;
+  border-radius: 4px;
+}
+
+/* ── Brush ───────────────────────────────────────────── */
+.brush .overlay { pointer-events: all; }
+.brush .selection {
+  fill: rgba(45,125,45,.15);
+  stroke: #2d7d2d;
+  stroke-width: 1;
+}
+.brush .handle {
+  fill: #2d7d2d;
+  stroke: #1a5c1a;
+  cursor: ew-resize;
+}
+
+/* ── Gráficos 3 + 4 lado a lado ─────────────────────── */
+.containerg34 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.6rem;
+  width: 100%;
+  margin-bottom: 1.6rem;
+}
+
+@media (max-width: 900px) {
+  .containerg34 { grid-template-columns: 1fr; }
+}
+
+#chart3 svg,
+#chart4 svg {
+  width: 100%;
+  display: block;
+}
+
+/* ── Details on Demand ───────────────────────────────── */
+#details-panel {
+  margin-bottom: 1.6rem;
+}
+
+.details-placeholder {
+  color: #aaa;
+  font-size: 13px;
+  margin: 0;
+}
+
+.details-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  width: 100%;
+  max-width: 500px;
+}
+
+.details-table th,
+.details-table td {
+  padding: 5px 12px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+}
+
+.details-table th {
+  color: #666;
+  font-weight: 600;
+  width: 170px;
+}
+
+.details-table tr:last-child th,
+.details-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* ── Tooltips ────────────────────────────────────────── */
+.tooltip-map,
+.tooltip-food,
+.tooltip-nonfood,
+.tooltip-dumbbell {
+  transition: opacity .15s ease;
+  pointer-events: none;
+  z-index: 1000;
+  max-width: 300px;
+  line-height: 1.5;
+}
+
+/* ── Pontos dos gráficos de linha ────────────────────── */
+#chart2 .dot,
+#chart3 circle {
+  transition: r .15s ease, fill .15s ease;
+  cursor: pointer;
+}
+
+/* ── Grid lines ──────────────────────────────────────── */
+.grid line { stroke: #f0f0f0; }
+.grid .domain { display: none; }
