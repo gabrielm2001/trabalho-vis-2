@@ -3,7 +3,7 @@
 export const filterState = {
   year: 2021,
   country: "ALL",    // País A: filtro principal (gráficos 2 e 3)
-  product: "Wheat",  // Commodity selecionada (gráficos 1, 2, 4)
+  product: "Wheat flour",  // Commodity selecionada (gráficos 1, 2, 4)
   yearStart: 2015,   // Início do intervalo selecionado pelo brush
   yearEnd: 2026,     // Fim do intervalo selecionado pelo brush
   countryB: null,    // País B: clicado no mapa (gráfico 4)
