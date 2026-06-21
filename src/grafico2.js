@@ -1,20 +1,29 @@
 import { executeQuery } from "./dataLoader.js";
 import { filterState, updateFilter, onFilterChange } from "./filterState.js";
+import { getName } from "./countryNames.js";
+import { UNIT_NORM_SQL } from "./priceUtils.js";
 
 async function loadData() {
   const { country, product } = filterState;
   const safe = product.replace(/'/g, "''");
   const cf = country === "ALL" ? "" : `AND countryiso3 = '${country}'`;
   return await executeQuery(`
-    SELECT CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) AS year,
-           ROUND(AVG(usdprice), 4)   AS avg_price,
-           CAST(COUNT(*) AS INTEGER)  AS records,
-           MAX(unit)                  AS unit
-    FROM wfp
-    WHERE category NOT IN ('non-food')
-      AND commodity = '${safe}'
-      ${cf}
-      AND usdprice > 0
+    WITH norm AS (
+      SELECT CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) AS year,
+             unit,
+             (${UNIT_NORM_SQL}) AS norm_price
+      FROM wfp
+      WHERE category NOT IN ('non-food')
+        AND commodity = '${safe}'
+        ${cf}
+        AND usdprice > 0
+    )
+    SELECT year,
+           ROUND(AVG(norm_price), 4)  AS avg_price,
+           CAST(COUNT(*) AS INTEGER)   AS records,
+           'kg equiv.'                 AS unit
+    FROM norm
+    WHERE norm_price IS NOT NULL AND norm_price > 0
     GROUP BY year
     ORDER BY year
   `);
@@ -28,7 +37,7 @@ function showDetails(d) {
     <table class="details-table">
       <tr><th>Ano</th><td>${d.year}</td></tr>
       <tr><th>Produto</th><td>${filterState.product}</td></tr>
-      <tr><th>País</th><td>${filterState.country === "ALL" ? "Todos" : filterState.country}</td></tr>
+      <tr><th>País</th><td>${filterState.country === "ALL" ? "Todos" : getName(filterState.country)}</td></tr>
       <tr><th>Preço médio (USD)</th><td>$${(+d.avg_price).toFixed(4)}</td></tr>
       <tr><th>Unidade</th><td>${d.unit || "—"}</td></tr>
       <tr><th>Registros</th><td>${d.records?.toLocaleString()}</td></tr>
@@ -98,7 +107,7 @@ async function render() {
   g.append("text").attr("transform", "rotate(-90)")
     .attr("y", -margin.left + 15).attr("x", -H / 2)
     .attr("dy", "1em").style("text-anchor", "middle").style("font-size", "12px")
-    .text("Preço Médio (USD)");
+    .text("Preço Médio (USD / kg equiv.)");
   g.append("text")
     .attr("transform", `translate(${W / 2},${H + margin.bottom - 6})`)
     .style("text-anchor", "middle").style("font-size", "12px").text("Ano");

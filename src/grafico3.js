@@ -1,5 +1,6 @@
 import { executeQuery } from "./dataLoader.js";
 import { filterState, onFilterChange } from "./filterState.js";
+import { getName } from "./countryNames.js";
 
 // Commodities non-food de interesse — exibidas por padrão
 const NON_FOOD_COMMODITIES = [
@@ -53,9 +54,9 @@ async function render() {
   const svg = d3.select("#chart3 svg");
   svg.selectAll("*").remove();
 
-  const margin = { top: 35, right: 160, bottom: 50, left: 75 };
-  const totalW = svg.node().clientWidth || 700;
-  const W = totalW - margin.left - margin.right;
+  const margin = { top: 35, right: 170, bottom: 50, left: 75 };
+  const totalW = svg.node().getBoundingClientRect().width || 600;
+  const W = Math.max(200, totalW - margin.left - margin.right);
   const H = 380 - margin.top - margin.bottom;
 
   svg.attr("width", totalW).attr("height", H + margin.top + margin.bottom);
@@ -171,7 +172,7 @@ async function render() {
             <tr><th>Commodity</th><td>${d.commodity}</td></tr>
             <tr><th>Categoria</th><td>non-food</td></tr>
             <tr><th>Ano</th><td>${d.year}</td></tr>
-            <tr><th>País</th><td>${filterState.country === "ALL" ? "Todos" : filterState.country}</td></tr>
+            <tr><th>País</th><td>${filterState.country === "ALL" ? "Todos" : getName(filterState.country)}</td></tr>
             <tr><th>Preço médio (USD)</th><td>$${(+d.avg_price).toFixed(4)}</td></tr>
             <tr><th>Unidade</th><td>${d.unit || "—"}</td></tr>
             <tr><th>Registros</th><td>${d.records?.toLocaleString()}</td></tr>
@@ -179,16 +180,27 @@ async function render() {
       });
   });
 
-  // Legenda lateral
-  const legendX = W + 15;
+  // Legenda lateral — posicionada dentro do margin.right
+  const legendX = W + 12;
+  const shortNames = {
+    "Fuel (petrol-gasoline)": "Gasolina",
+    "Fuel (diesel)":          "Diesel",
+    "Fertilizer (urea)":      "Ureia",
+    "Fertilizer (NPK)":       "Fert. NPK",
+    "Fuel (kerosene)":        "Querosene",
+  };
   NON_FOOD_COMMODITIES.forEach((comm, i) => {
     if (!byComm.has(comm)) return;
     const col = COMMODITY_COLORS[comm] || "#888";
-    const ly = i * 22;
-    g.append("rect").attr("x", legendX).attr("y", ly).attr("width", 14).attr("height", 4).attr("fill", col);
-    g.append("text").attr("x", legendX + 18).attr("y", ly + 5)
-      .style("font-size", "10px").style("fill", "#333")
-      .text(comm.length > 22 ? comm.slice(0, 21) + "…" : comm);
+    const ly = i * 24;
+    g.append("line")
+      .attr("x1", legendX).attr("x2", legendX + 14)
+      .attr("y1", ly + 2).attr("y2", ly + 2)
+      .attr("stroke", col).attr("stroke-width", 3);
+    g.append("circle").attr("cx", legendX + 7).attr("cy", ly + 2).attr("r", 4).attr("fill", col);
+    g.append("text").attr("x", legendX + 20).attr("y", ly + 6)
+      .style("font-size", "11px").style("fill", "#333")
+      .text(shortNames[comm] || comm);
   });
 }
 

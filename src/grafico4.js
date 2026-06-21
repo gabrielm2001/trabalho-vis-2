@@ -1,5 +1,7 @@
 import { executeQuery } from "./dataLoader.js";
 import { filterState, onFilterChange } from "./filterState.js";
+import { getName } from "./countryNames.js";
+import { UNIT_NORM_SQL } from "./priceUtils.js";
 
 async function loadData() {
   const { country, countryB, product, yearStart, yearEnd } = filterState;
@@ -9,35 +11,27 @@ async function loadData() {
   const cA = country === "ALL" ? null : country;
 
   // Se país A for ALL, usamos a média global
-  const queryA = cA
-    ? `SELECT CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) AS year,
-              ROUND(AVG(usdprice), 4) AS avg_price,
-              MAX(unit) AS unit
-       FROM wfp
-       WHERE commodity = '${safe}'
-         AND countryiso3 = '${cA}'
-         AND usdprice > 0
-         AND CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) BETWEEN ${yearStart} AND ${yearEnd}
-       GROUP BY year ORDER BY year`
-    : `SELECT CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) AS year,
-              ROUND(AVG(usdprice), 4) AS avg_price,
-              MAX(unit) AS unit
-       FROM wfp
-       WHERE commodity = '${safe}'
-         AND usdprice > 0
-         AND CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) BETWEEN ${yearStart} AND ${yearEnd}
-       GROUP BY year ORDER BY year`;
+  const baseWhere = `commodity = '${safe}' AND usdprice > 0
+    AND CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) BETWEEN ${yearStart} AND ${yearEnd}`;
 
-  const queryB = `
-    SELECT CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) AS year,
-           ROUND(AVG(usdprice), 4) AS avg_price,
-           MAX(unit) AS unit
-    FROM wfp
-    WHERE commodity = '${safe}'
-      AND countryiso3 = '${countryB}'
-      AND usdprice > 0
-      AND CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) BETWEEN ${yearStart} AND ${yearEnd}
-    GROUP BY year ORDER BY year`;
+  const queryA = cA
+    ? `WITH norm AS (SELECT CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) AS year,
+                           (${UNIT_NORM_SQL}) AS norm_price
+                    FROM wfp WHERE ${baseWhere} AND countryiso3 = '${cA}')
+       SELECT year, ROUND(AVG(norm_price),4) AS avg_price, 'kg equiv.' AS unit
+       FROM norm WHERE norm_price IS NOT NULL AND norm_price > 0 GROUP BY year ORDER BY year`
+    : `WITH norm AS (SELECT CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) AS year,
+                           (${UNIT_NORM_SQL}) AS norm_price
+                    FROM wfp WHERE ${baseWhere})
+       SELECT year, ROUND(AVG(norm_price),4) AS avg_price, 'kg equiv.' AS unit
+       FROM norm WHERE norm_price IS NOT NULL AND norm_price > 0 GROUP BY year ORDER BY year`;
+
+  const queryB =
+    `WITH norm AS (SELECT CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) AS year,
+                         (${UNIT_NORM_SQL}) AS norm_price
+                  FROM wfp WHERE ${baseWhere} AND countryiso3 = '${countryB}')
+     SELECT year, ROUND(AVG(norm_price),4) AS avg_price, 'kg equiv.' AS unit
+     FROM norm WHERE norm_price IS NOT NULL AND norm_price > 0 GROUP BY year ORDER BY year`;
 
   const [rowsA, rowsB] = await Promise.all([executeQuery(queryA), executeQuery(queryB)]);
   return { rowsA, rowsB };
@@ -86,7 +80,7 @@ async function render() {
   }
 
   const margin = { top: 30, right: 30, bottom: 50, left: 80 };
-  const totalW = svg.node().clientWidth || 500;
+  const totalW = svg.node().getBoundingClientRect().width || 480;
   const W = totalW - margin.left - margin.right;
   const rowH = 38;
   const H = dumbData.length * rowH;
@@ -99,8 +93,8 @@ async function render() {
   const xScale = d3.scaleLinear().domain([Math.max(0, pMin * 0.85), pMax * 1.12]).range([0, W]);
   const yScale = d3.scaleBand().domain(dumbData.map((d) => d.year)).range([0, H]).padding(0.3);
 
-  const labelA = country === "ALL" ? "Média Global" : country;
-  const labelB = countryB;
+  const labelA = country === "ALL" ? "Média Global" : getName(country);
+  const labelB = getName(countryB);
 
   // Eixos
   g.append("g").attr("transform", `translate(0,${H})`)

@@ -1,5 +1,6 @@
 import { executeQuery } from "./dataLoader.js";
 import { filterState, updateFilter, onFilterChange } from "./filterState.js";
+import { UNIT_NORM_SQL } from "./priceUtils.js";
 
 let _geoData = null;
 
@@ -7,14 +8,20 @@ async function loadData() {
   const { year, product } = filterState;
   const safe = product.replace(/'/g, "''");
   const result = await executeQuery(`
+    WITH norm AS (
+      SELECT countryiso3, unit,
+             (${UNIT_NORM_SQL}) AS norm_price
+      FROM wfp
+      WHERE CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) = ${year}
+        AND commodity = '${safe}'
+        AND usdprice > 0
+    )
     SELECT countryiso3,
-           ROUND(AVG(usdprice), 4)  AS avg_price,
-           MAX(unit)                AS unit,
-           CAST(COUNT(*) AS INTEGER) AS records
-    FROM wfp
-    WHERE CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) = ${year}
-      AND commodity = '${safe}'
-      AND usdprice > 0
+           ROUND(AVG(norm_price), 4)  AS avg_price,
+           MAX(unit)                   AS unit,
+           CAST(COUNT(*) AS INTEGER)   AS records
+    FROM norm
+    WHERE norm_price IS NOT NULL AND norm_price > 0
     GROUP BY countryiso3
   `);
   return result;
@@ -48,8 +55,25 @@ async function renderMap() {
   });
 
   const vals = Array.from(priceMap.values()).filter((v) => v > 0);
-  const [minP, maxP] = vals.length ? d3.extent(vals) : [0, 1];
 
+  if (!vals.length) {
+    svg.append("text")
+      .attr("x", (svg.node().clientWidth || 900) / 2)
+      .attr("y", (svg.node().clientHeight || 500) / 2)
+      .attr("text-anchor", "middle")
+      .style("font-size", "15px")
+      .style("fill", "#999")
+      .text(`Sem dados para "${filterState.product}" no ano ${filterState.year} — tente outro produto ou ano.`);
+
+    // Renderiza o mapa em cinza mesmo assim
+    svg.selectAll("path").data(_geoData.features).join("path")
+      .attr("d", d3.geoPath().projection(d3.geoMercator().fitSize(
+        [svg.node().clientWidth || 900, svg.node().clientHeight || 500], _geoData)))
+      .attr("fill", "#e8e8e8").attr("stroke", "#ccc").attr("stroke-width", 0.4);
+    return;
+  }
+
+  const [minP, maxP] = d3.extent(vals);
   const color = d3.scaleSequential(d3.interpolateGreens).domain([minP, maxP * 1.1]);
 
   const tooltip = d3.select("body").selectAll(".tooltip-map").data([null]).join("div")
@@ -141,7 +165,7 @@ async function renderMap() {
     .selectAll("text").style("font-size", "10px");
 
   svg.append("text").attr("x", lx).attr("y", ly - 5)
-    .text(`Preço médio USD — ${filterState.product} (${filterState.year})`)
+    .text(`USD/kg equiv. — ${filterState.product} (${filterState.year})`)
     .style("font-size", "11px").style("fill", "#444");
 }
 
