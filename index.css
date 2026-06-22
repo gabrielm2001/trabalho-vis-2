@@ -238,7 +238,25 @@ h3 {
   align-items: stretch;   /* iguala altura dos cards */
 }
 
-/* media query mantida para compatibilidade visual, mas agora redundante */
+/* Garantir que os cards 3 e 4 tenham altura igual e que o SVG fique proporcional dentro do card */
+.containerg34 .chart {
+  height: var(--chart-height);
+  display: flex;
+  flex-direction: column;
+}
+
+.containerg34 .chart h2 {
+  flex: 0 0 auto; /* cabeçalho não cresce */
+  margin-bottom: 0.6rem;
+}
+
+.containerg34 .chart svg {
+  flex: 1 1 auto; /* ocupa o espaço restante */
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 @media (max-width: 960px) {
   .containerg34 { grid-template-columns: 1fr; }
 }
@@ -247,14 +265,14 @@ h3 {
   width: 100%;
   display: block;
   overflow: visible;
-  height: var(--chart-height);
+  /* height handled by .containerg34 .chart svg when inside containerg34 */
 }
 
 #chart4 svg {
   width: 100%;
   display: block;
   overflow: visible;
-  height: var(--chart-height);
+  /* height handled by .containerg34 .chart svg when inside containerg34 */
 }
 
 /* ── Details on Demand ───────────────────────────────── */
