@@ -186,16 +186,19 @@ async function render() {
     }
   });
 
-  // Legenda
+  // Legenda centralizada
   const legendY = -25;
-  [
+  const legendItems = [
     { label: labelA, color: "#2d7d2d" },
     { label: labelB, color: "#e8a838" },
-  ].forEach((l, i) => {
-    const lx = i * (W / 2);
-    g.append("circle").attr("cx", lx + 8).attr("cy", legendY).attr("r", 7).attr("fill", l.color);
-    g.append("text").attr("x", lx + 20).attr("y", legendY + 4)
-      .style("font-size", "12px").style("fill", "#333").text(l.label);
+  ];
+  const nLeg = legendItems.length;
+  const spacing = W / (nLeg + 1);
+  legendItems.forEach((l, i) => {
+    const cx = spacing * (i + 1);
+    g.append("circle").attr("cx", cx).attr("cy", legendY).attr("r", 7).attr("fill", l.color);
+    g.append("text").attr("x", cx + 12).attr("y", legendY + 4)
+      .attr("text-anchor", "start").style("font-size", "12px").style("fill", "#333").text(l.label);
   });
 }
 
