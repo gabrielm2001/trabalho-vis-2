@@ -1,7 +1,23 @@
-// Normalizes usdprice to price per base unit (per kg for weight, per L for liquid).
-// Fixes the composition bias from countries reporting in different units:
-//   e.g. Syria (MT=1000kg → $493-1716), Ethiopia (100KG → $56-70), most countries (KG → $0.40).
-// Without normalization, the global AVG swings wildly as the mix of reporting countries changes.
+// priceUtils.js — Normalização de usdprice para preço por unidade base (kg, L, etc.).
+//
+// Problema: o campo usdprice do WFP armazena o preço na unidade original de cada país.
+// Países diferentes usam unidades diferentes para o mesmo produto:
+//   - Síria (SYR): Wheat em MT (tonelada métrica) → usdprice ≈ $493–1716
+//   - Etiópia (ETH): Wheat em 100 KG → usdprice ≈ $56–70
+//   - Maioria: Wheat em KG → usdprice ≈ $0.40–1.00
+//
+// Calcular AVG(usdprice) sem normalização produz médias globais sem sentido:
+// a Síria entrava e saía do dataset causando variação de $120 (2019) → $5 (2021),
+// obscurecendo a tendência real de alta pós-COVID.
+//
+// Solução: CASE WHEN em SQL que converte tudo para preço por kg (ou por L para líquidos).
+// Padrões como "% KG" e "% G" são extraídos com split_part() + TRY_CAST() do DuckDB,
+// o que permite normalizar automaticamente variantes como "100 KG", "2.5 KG", "500 G"
+// sem listar cada unidade individualmente.
+// NULLIF(..., 0) previne divisão por zero caso split_part retorne um valor inválido.
+// Unidades não reconhecidas (Unit, Head, Piece) retornam usdprice sem alteração,
+// pois dentro de uma única commodity elas são consistentes entre países.
+
 export const UNIT_NORM_SQL = `
   CASE
     WHEN unit = 'KG'         THEN usdprice

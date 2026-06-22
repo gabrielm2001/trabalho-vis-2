@@ -1,8 +1,36 @@
+// grafico4.js — Dumbbell plot: comparativo de preços País A vs País B (Gráfico 4).
+//
+// Cada linha horizontal representa um ano. Dois círculos conectados por uma linha
+// mostram o preço médio do produto selecionado para dois países:
+//   - Círculo verde (#2d7d2d) → País A (selecionado no dropdown de filtros)
+//   - Círculo laranja (#e8a838) → País B (selecionado clicando no mapa)
+//
+// O gap (Δ$) entre os círculos é exibido acima da linha conectora.
+//
+// Dumbbell foi escolhido sobre barras agrupadas porque compara uma única métrica
+// (preço) entre dois sujeitos ao longo de múltiplos anos — o gap entre os círculos
+// é imediatamente legível sem necessidade de decoding de barras lado a lado.
+//
+// Re-renderiza quando: countryB, country, product, yearStart ou yearEnd mudam.
+
 import { executeQuery } from "./dataLoader.js";
 import { filterState, onFilterChange } from "./filterState.js";
 import { getName } from "./countryNames.js";
 import { UNIT_NORM_SQL } from "./priceUtils.js";
 
+/**
+ * Carrega dados de preços normalizados para País A e País B em paralelo.
+ * Retorna null se countryB ainda não foi selecionado (estado inicial).
+ *
+ * País A pode ser "ALL" (média global) ou um país específico — a query
+ * correspondente é selecionada condicionalmente para evitar a cláusula AND
+ * desnecessária em caso global.
+ *
+ * As queries usam CTE (WITH norm AS ...) para normalizar as unidades antes
+ * de agregar, garantindo comparabilidade entre países com unidades diferentes.
+ * Promise.all() executa as duas queries em paralelo — o DuckDB-WASM suporta
+ * concorrência dentro da mesma conexão via filas internas.
+ */
 async function loadData() {
   const { country, countryB, product, yearStart, yearEnd } = filterState;
   if (!countryB) return null;
@@ -10,10 +38,11 @@ async function loadData() {
   const safe = product.replace(/'/g, "''");
   const cA = country === "ALL" ? null : country;
 
-  // Se país A for ALL, usamos a média global
+  // WHERE base compartilhado pelas queries A e B para evitar repetição
   const baseWhere = `commodity = '${safe}' AND usdprice > 0
     AND CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) BETWEEN ${yearStart} AND ${yearEnd}`;
 
+  // Query A: país específico ou média global (sem filtro de país)
   const queryA = cA
     ? `WITH norm AS (SELECT CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) AS year,
                            (${UNIT_NORM_SQL}) AS norm_price
@@ -26,6 +55,7 @@ async function loadData() {
        SELECT year, ROUND(AVG(norm_price),4) AS avg_price, 'kg equiv.' AS unit
        FROM norm WHERE norm_price IS NOT NULL AND norm_price > 0 GROUP BY year ORDER BY year`;
 
+  // Query B: sempre para um país específico (countryB vem do clique no mapa)
   const queryB =
     `WITH norm AS (SELECT CAST(EXTRACT(year FROM CAST(date AS DATE)) AS INTEGER) AS year,
                          (${UNIT_NORM_SQL}) AS norm_price
@@ -43,6 +73,7 @@ async function render() {
 
   const { country, countryB, product, yearStart, yearEnd } = filterState;
 
+  // Estado inicial: País B ainda não foi selecionado no mapa
   if (!countryB) {
     const W = svg.node().clientWidth || 400;
     const containerH = svg.node().clientHeight || 200;
@@ -58,12 +89,13 @@ async function render() {
 
   const { rowsA, rowsB } = res;
 
-  // Unir por ano
+  // Transforma os arrays em Maps para lookup O(1) por ano durante a renderização
   const mapA = new Map(rowsA.map((r) => [r.year, +r.avg_price]));
   const mapB = new Map(rowsB.map((r) => [r.year, +r.avg_price]));
   const unitA = rowsA[0]?.unit || "";
   const unitB = rowsB[0]?.unit || "";
 
+  // União dos anos presentes em A e/ou B — um país pode ter dados em anos que o outro não tem
   const years = Array.from(new Set([...mapA.keys(), ...mapB.keys()])).sort((a, b) => a - b);
   const dumbData = years.map((y) => ({
     year: y,
@@ -72,7 +104,7 @@ async function render() {
   })).filter((d) => d.priceA !== null || d.priceB !== null);
 
   if (!dumbData.length) {
-    const W = svg.node().clientWidth || 400;
+    const W = svg.node().getBoundingClientRect().width || 400;
     svg.attr("width", W).attr("height", 200);
     svg.append("text").attr("x", W / 2).attr("y", 100)
       .attr("text-anchor", "middle").style("fill", "#aaa").style("font-size", "13px")
@@ -96,7 +128,7 @@ async function render() {
   const containerInnerH = Math.max(120, chartRect.height - paddingTop - paddingBottom - headerRect.height - headerMarginBottom);
 
   const W = totalW - margin.left - margin.right;
-  // compute row height to fit all rows inside the available inner height
+  // Altura calculada dinamicamente: rows se ajustam ao espaço disponível no card.
   const rowH = Math.max(20, Math.floor(containerInnerH / Math.max(1, dumbData.length)));
   const H = rowH * dumbData.length;
 
@@ -107,13 +139,22 @@ async function render() {
 
   const allPrices = dumbData.flatMap((d) => [d.priceA, d.priceB].filter((v) => v !== null));
   const [pMin, pMax] = d3.extent(allPrices);
+
+  // Escala X: domínio expandido 15% abaixo do mínimo e 12% acima do máximo
+  // para que os círculos extremos não toquem as bordas do gráfico.
   const xScale = d3.scaleLinear().domain([Math.max(0, pMin * 0.85), pMax * 1.12]).range([0, W]);
+
+  // scaleBand organiza os anos como faixas horizontais de largura uniforme.
+  // bandwidth() retorna a altura de cada faixa; metade dela é usada para centralizar
+  // os círculos verticalmente dentro da faixa.
+  // padding(0.3) adiciona 30% de espaço entre as faixas para legibilidade.
   const yScale = d3.scaleBand().domain(dumbData.map((d) => d.year)).range([0, H]).padding(0.3);
 
+  // Rótulos legíveis dos países (nomes completos via getName())
   const labelA = country === "ALL" ? "Média Global" : getName(country);
   const labelB = getName(countryB);
 
-  // Eixos
+  // Eixo X: formato de moeda; eixo Y: anos como inteiros (sem vírgula de milhar)
   g.append("g").attr("transform", `translate(0,${H})`)
     .call(d3.axisBottom(xScale).ticks(5).tickFormat((v) => `$${v.toFixed(2)}`));
   g.append("g").call(d3.axisLeft(yScale).tickFormat(d3.format("d")));
@@ -123,7 +164,7 @@ async function render() {
     .style("text-anchor", "middle").style("font-size", "12px")
     .text(`Preço médio USD — ${product} (${unitA || unitB})`);
 
-  // Tooltip
+  // Tooltip único reutilizado (padrão .data([null]).join)
   const tooltip = d3.select("body").selectAll(".tooltip-dumbbell").data([null]).join("div")
     .attr("class", "tooltip-dumbbell")
     .style("position", "absolute").style("padding", "9px 13px")
@@ -132,20 +173,21 @@ async function render() {
     .style("pointer-events", "none").style("opacity", 0)
     .style("box-shadow", "0 4px 10px rgba(0,0,0,.12)");
 
-  // Dumbbell por ano
+  // Renderiza um dumbbell por ano — linha conectora + dois círculos + label de gap
   dumbData.forEach((d) => {
+    // cy: centro vertical da faixa do ano (yScale + metade do bandwidth)
     const cy = (yScale(d.year) || 0) + yScale.bandwidth() / 2;
     const xA = d.priceA !== null ? xScale(d.priceA) : null;
     const xB = d.priceB !== null ? xScale(d.priceB) : null;
 
-    // Linha conectora
+    // Linha conectora — só desenhada quando ambos os países têm dado para o ano
     if (xA !== null && xB !== null) {
       g.append("line")
         .attr("x1", xA).attr("x2", xB).attr("y1", cy).attr("y2", cy)
         .attr("stroke", "#ccc").attr("stroke-width", 2);
     }
 
-    // Dot País A (verde)
+    // Círculo País A (verde)
     if (xA !== null) {
       g.append("circle")
         .attr("cx", xA).attr("cy", cy).attr("r", 7)
@@ -160,7 +202,7 @@ async function render() {
         .on("mouseout", () => tooltip.style("opacity", 0));
     }
 
-    // Dot País B (laranja/vermelho)
+    // Círculo País B (laranja)
     if (xB !== null) {
       g.append("circle")
         .attr("cx", xB).attr("cy", cy).attr("r", 7)
@@ -175,7 +217,7 @@ async function render() {
         .on("mouseout", () => tooltip.style("opacity", 0));
     }
 
-    // Diferença (gap label)
+    // Label Δ$ entre os dois círculos — posicionado no ponto médio da linha conectora
     if (xA !== null && xB !== null) {
       const gap = Math.abs(d.priceA - d.priceB);
       const midX = (xA + xB) / 2;
@@ -186,7 +228,7 @@ async function render() {
     }
   });
 
-  // Legenda centralizada
+  // Legenda acima dos dumbbells: dois itens lado a lado, um por metade da largura
   const legendY = -25;
   const legendItems = [
     { label: labelA, color: "#2d7d2d" },
@@ -202,6 +244,11 @@ async function render() {
   });
 }
 
+/**
+ * Ponto de entrada do Gráfico 4.
+ * Ouve countryB (clique no mapa), country e product (dropdown de filtros)
+ * e yearStart/yearEnd (brush do Gráfico 2) para refletir todos os filtros ativos.
+ */
 export async function grafico4() {
   await render();
   onFilterChange(["countryB", "country", "product", "yearStart", "yearEnd"], async () => await render());
