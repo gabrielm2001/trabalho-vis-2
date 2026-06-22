@@ -70,7 +70,7 @@ async function render() {
   if (!raw.length) {
     g.append("text").attr("x", W / 2).attr("y", H / 2)
       .attr("text-anchor", "middle").style("fill", "#aaa")
-      .text("Sem dados non-food para o país/período selecionado");
+      .text("Sem dados de combustíveis para o país/período selecionado");
     return;
   }
 
@@ -188,6 +188,7 @@ async function render() {
 
   // Legenda lateral — posicionada dentro do margin.right
   const legendX = W + 12;
+  const legendYStart = 34;
   const shortNames = {
     "Fuel (petrol-gasoline)": "Gasolina",
     "Fuel (diesel)":          "Diesel",
@@ -196,7 +197,7 @@ async function render() {
   NON_FOOD_COMMODITIES.forEach((comm, i) => {
     if (!byComm.has(comm)) return;
     const col = COMMODITY_COLORS[comm] || "#888";
-    const ly = i * 24;
+    const ly = legendYStart + i * 24;
     g.append("line")
       .attr("x1", legendX).attr("x2", legendX + 14)
       .attr("y1", ly + 2).attr("y2", ly + 2)
