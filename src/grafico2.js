@@ -3,6 +3,9 @@ import { filterState, updateFilter, onFilterChange } from "./filterState.js";
 import { getName } from "./countryNames.js";
 import { UNIT_NORM_SQL } from "./priceUtils.js";
 
+const TIME_DOMAIN = [2015, 2026];
+const TIME_TICKS = d3.range(2015, 2027);
+
 async function loadData() {
   const { country, product } = filterState;
   const safe = product.replace(/'/g, "''");
@@ -72,7 +75,7 @@ async function render() {
     return;
   }
 
-  const xScale = d3.scaleLinear().domain(d3.extent(data, (d) => d.year)).range([0, W]);
+  const xScale = d3.scaleLinear().domain(TIME_DOMAIN).range([0, W]);
   const yScale = d3.scaleLinear()
     .domain([0, d3.max(data, (d) => +d.avg_price) * 1.12])
     .nice().range([H, 0]);
@@ -84,23 +87,30 @@ async function render() {
     .selectAll("line").style("stroke", "#f0f0f0");
 
   // Anotações de crise
-  const [yMin, yMax] = xScale.domain();
+  const [yMin, yMax] = TIME_DOMAIN;
   CRISES.forEach((c) => {
     if (c.year < yMin || c.year > yMax) return;
+    const isRightEdge = c.year >= yMax - 1;
+    const labelX = isRightEdge ? xScale(c.year) - 4 : xScale(c.year) + 4;
     g.append("line")
       .attr("x1", xScale(c.year)).attr("x2", xScale(c.year))
       .attr("y1", 0).attr("y2", H)
       .attr("stroke", "#e63946").attr("stroke-dasharray", "4,3")
       .attr("stroke-width", 1).attr("opacity", 0.5);
     g.append("text")
-      .attr("x", xScale(c.year) + 4).attr("y", 13)
+      .attr("x", labelX).attr("y", 13)
+      .attr("text-anchor", isRightEdge ? "end" : "start")
       .style("font-size", "9px").style("fill", "#e63946").style("opacity", 0.75)
       .text(c.label);
   });
 
   // Eixos
   g.append("g").attr("transform", `translate(0,${H})`)
-    .call(d3.axisBottom(xScale).tickFormat(d3.format("d"))).attr("class", "x-axis");
+    .call(
+      d3.axisBottom(xScale)
+        .tickValues(TIME_TICKS)
+        .tickFormat(d3.format("d"))
+    ).attr("class", "x-axis");
   g.append("g").call(d3.axisLeft(yScale).tickFormat((v) => `$${v}`)).attr("class", "y-axis");
 
   // Labels
@@ -159,25 +169,7 @@ async function render() {
       updateFilter({ year: Number(d.year) });
     });
 
-  // Brush → atualiza yearStart/yearEnd para gráficos 3 e 4
-  const brushInfo = d3.select("#brush-info-food");
-  const brush = d3.brushX()
-    .extent([[0, 0], [W, H]])
-    .on("end", function (event) {
-      if (!event.selection) {
-        brushInfo.style("display", "none");
-        const allYears = data.map((d) => d.year);
-        updateFilter({ yearStart: d3.min(allYears), yearEnd: d3.max(allYears) });
-        return;
-      }
-      const [x0, x1] = event.selection.map(xScale.invert);
-      const ys = Math.round(x0), ye = Math.round(x1);
-      brushInfo.style("display", "block")
-        .html(`<strong>Período selecionado:</strong> ${ys} – ${ye} &nbsp;(Gráficos 3 e 4 filtrados)`);
-      updateFilter({ yearStart: ys, yearEnd: ye });
-    });
 
-  g.append("g").attr("class", "brush").call(brush);
 }
 
 export async function grafico2() {

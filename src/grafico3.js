@@ -2,12 +2,13 @@ import { executeQuery } from "./dataLoader.js";
 import { filterState, onFilterChange } from "./filterState.js";
 import { getName } from "./countryNames.js";
 
+const TIME_DOMAIN = [2015, 2026];
+const TIME_TICKS = d3.range(2015, 2027);
+
 // Commodities non-food de interesse — exibidas por padrão
 const NON_FOOD_COMMODITIES = [
   "Fuel (petrol-gasoline)",
   "Fuel (diesel)",
-  "Fertilizer (urea)",
-  "Fertilizer (NPK)",
   "Fuel (kerosene)",
 ];
 
@@ -15,8 +16,6 @@ const NON_FOOD_COMMODITIES = [
 const COMMODITY_COLORS = {
   "Fuel (petrol-gasoline)": "#e63946",
   "Fuel (diesel)":          "#457b9d",
-  "Fertilizer (urea)":      "#2a9d8f",
-  "Fertilizer (NPK)":       "#e9c46a",
   "Fuel (kerosene)":        "#6d4c41",
 };
 
@@ -76,7 +75,7 @@ async function render() {
   }
 
   const allYears = raw.map((d) => d.year);
-  const xScale = d3.scaleLinear().domain(d3.extent(allYears)).range([0, W]);
+  const xScale = d3.scaleLinear().domain(TIME_DOMAIN).range([0, W]);
   const yScale = d3.scaleLinear()
     .domain([0, d3.max(raw, (d) => +d.avg_price) * 1.12])
     .nice().range([H, 0]);
@@ -89,7 +88,7 @@ async function render() {
 
   // Anotações
   CRISES.forEach((c) => {
-    const [y0, y1] = xScale.domain();
+    const [y0, y1] = TIME_DOMAIN;
     if (c.year < y0 || c.year > y1) return;
     g.append("line")
       .attr("x1", xScale(c.year)).attr("x2", xScale(c.year))
@@ -102,7 +101,7 @@ async function render() {
 
   // Destaque do ano selecionado
   const selYear = filterState.year;
-  const [dy0, dy1] = xScale.domain();
+  const [dy0, dy1] = TIME_DOMAIN;
   if (selYear >= dy0 && selYear <= dy1) {
     g.append("rect")
       .attr("x", xScale(selYear) - 6).attr("y", 0)
@@ -112,7 +111,11 @@ async function render() {
 
   // Eixos
   g.append("g").attr("transform", `translate(0,${H})`)
-    .call(d3.axisBottom(xScale).tickFormat(d3.format("d")));
+    .call(
+      d3.axisBottom(xScale)
+        .tickValues(TIME_TICKS)
+        .tickFormat(d3.format("d"))
+    );
   g.append("g").call(d3.axisLeft(yScale).tickFormat((v) => `$${v}`));
 
   g.append("text").attr("transform", "rotate(-90)")
@@ -188,8 +191,6 @@ async function render() {
   const shortNames = {
     "Fuel (petrol-gasoline)": "Gasolina",
     "Fuel (diesel)":          "Diesel",
-    "Fertilizer (urea)":      "Ureia",
-    "Fertilizer (NPK)":       "Fert. NPK",
     "Fuel (kerosene)":        "Querosene",
   };
   NON_FOOD_COMMODITIES.forEach((comm, i) => {
