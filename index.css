@@ -1,6 +1,10 @@
 /* ── Reset & Base ─────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 
+:root {
+  --chart-height: 360px; /* altura uniforme para todos os gráficos */
+}
+
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   margin: 0;
@@ -187,7 +191,7 @@ h3 {
 
 #worldmap svg {
   width: 100%;
-  height: 460px;
+  height: var(--chart-height);
   display: block;
 }
 
@@ -198,6 +202,7 @@ h3 {
   width: 100%;
   display: block;
   overflow: visible;
+  height: var(--chart-height);
 }
 
 #brush-info-food {
@@ -223,16 +228,17 @@ h3 {
   cursor: ew-resize;
 }
 
-/* ── Gráficos 3 + 4 lado a lado ─────────────────────── */
+/* ── Gráficos 3 + 4 (3 em cima, 4 embaixo) ───────────── */
 .containerg34 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr; /* sempre empilha: 4 ficará abaixo de 3 */
   gap: 1.5rem;
   width: 100%;
   margin-bottom: 1.5rem;
-  align-items: start;   /* evita esticar o card menor */
+  align-items: stretch;   /* iguala altura dos cards */
 }
 
+/* media query mantida para compatibilidade visual, mas agora redundante */
 @media (max-width: 960px) {
   .containerg34 { grid-template-columns: 1fr; }
 }
@@ -241,14 +247,14 @@ h3 {
   width: 100%;
   display: block;
   overflow: visible;
-  min-height: 200px;
+  height: var(--chart-height);
 }
 
 #chart4 svg {
   width: 100%;
   display: block;
   overflow: visible;
-  min-height: 150px;
+  height: var(--chart-height);
 }
 
 /* ── Details on Demand ───────────────────────────────── */
