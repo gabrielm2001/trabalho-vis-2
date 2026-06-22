@@ -82,15 +82,27 @@ async function render() {
 
   const margin = { top: 30, right: 30, bottom: 50, left: 80 };
   const totalW = svg.node().getBoundingClientRect().width || 480;
-  const containerH = svg.node().clientHeight || 300; // read container height from CSS
+
+  // determine container inner height more robustly (account for card padding and heading)
+  const chartEl = svg.node().closest('.chart') || svg.node().parentNode;
+  const chartRect = chartEl.getBoundingClientRect();
+  const cs = window.getComputedStyle(chartEl);
+  const paddingTop = parseFloat(cs.paddingTop) || 0;
+  const paddingBottom = parseFloat(cs.paddingBottom) || 0;
+  const header = svg.node().previousElementSibling;
+  const headerRect = header ? header.getBoundingClientRect() : { height: 0 };
+  const headerMarginBottom = header ? (parseFloat(window.getComputedStyle(header).marginBottom) || 0) : 0;
+
+  const containerInnerH = Math.max(120, chartRect.height - paddingTop - paddingBottom - headerRect.height - headerMarginBottom);
+
   const W = totalW - margin.left - margin.right;
-  // compute row height to fit all rows inside the container; clamp to reasonable min
-  const availableH = Math.max(120, containerH - margin.top - margin.bottom);
-  const rowH = Math.max(24, Math.floor(availableH / Math.max(1, dumbData.length)));
+  // compute row height to fit all rows inside the available inner height
+  const rowH = Math.max(20, Math.floor(containerInnerH / Math.max(1, dumbData.length)));
   const H = rowH * dumbData.length;
 
-  // set svg size to match container so nothing overflows the card
-  svg.attr("width", totalW).attr("height", containerH);
+  // set svg size to match chart inner area (including margins)
+  const svgHeight = Math.max(H + margin.top + margin.bottom, headerRect.height + paddingTop + paddingBottom + 60);
+  svg.attr("width", totalW).attr("height", svgHeight).style("display", "block");
   const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
   const allPrices = dumbData.flatMap((d) => [d.priceA, d.priceB].filter((v) => v !== null));
