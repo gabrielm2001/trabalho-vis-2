@@ -16,17 +16,9 @@ import { filterState, updateFilter, onFilterChange } from "./filterState.js";
 import { getName } from "./countryNames.js";
 import { UNIT_NORM_SQL } from "./priceUtils.js";
 
-/**
- * Agrega preços por ano com normalização de unidades via CTE.
- *
- * O CTE "norm" calcula norm_price para cada registro e o outer SELECT
- * agrega apenas os registros normalizados válidos (IS NOT NULL AND > 0).
- * Isso exclui unidades incompatíveis (Unit, Head) que retornam usdprice sem
- * conversão — comportamento aceitável pois são consistentes dentro de cada commodity.
- *
- * O filtro de país é injetado condicionalmente na cláusula WHERE para evitar
- * uma branch de query completamente diferente.
- */
+const TIME_DOMAIN = [2015, 2026];
+const TIME_TICKS = d3.range(2015, 2027);
+
 async function loadData() {
   const { country, product } = filterState;
   const safe = product.replace(/'/g, "''");
@@ -103,13 +95,7 @@ async function render() {
     return;
   }
 
-  // scaleLinear mapeia anos (domínio discreto em aparência, mas contínuo) ao eixo X.
-  // Preferido sobre scaleTime aqui pois os dados já vêm agregados por ano inteiro.
-  const xScale = d3.scaleLinear().domain(d3.extent(data, (d) => d.year)).range([0, W]);
-
-  // Domínio Y inicia em 0 para que a área abaixo da linha seja comparável entre
-  // produtos. O fator 1.12 dá margem visual acima do pico para não truncar labels.
-  // .nice() arredonda os limites para valores "agradáveis" (ex.: 0.7 → 0.8).
+  const xScale = d3.scaleLinear().domain(TIME_DOMAIN).range([0, W]);
   const yScale = d3.scaleLinear()
     .domain([0, d3.max(data, (d) => +d.avg_price) * 1.12])
     .nice().range([H, 0]);
@@ -121,24 +107,31 @@ async function render() {
     .call((gg) => gg.select(".domain").remove()) // remove a linha do eixo, mantendo só as grades
     .selectAll("line").style("stroke", "#f0f0f0");
 
-  // Linhas verticais tracejadas nas crises — só dentro do domínio atual do brush
-  const [yMin, yMax] = xScale.domain();
+  // Anotações de crise
+  const [yMin, yMax] = TIME_DOMAIN;
   CRISES.forEach((c) => {
     if (c.year < yMin || c.year > yMax) return;
+    const isRightEdge = c.year >= yMax - 1;
+    const labelX = isRightEdge ? xScale(c.year) - 4 : xScale(c.year) + 4;
     g.append("line")
       .attr("x1", xScale(c.year)).attr("x2", xScale(c.year))
       .attr("y1", 0).attr("y2", H)
       .attr("stroke", "#e63946").attr("stroke-dasharray", "4,3")
       .attr("stroke-width", 1).attr("opacity", 0.5);
     g.append("text")
-      .attr("x", xScale(c.year) + 4).attr("y", 13)
+      .attr("x", labelX).attr("y", 13)
+      .attr("text-anchor", isRightEdge ? "end" : "start")
       .style("font-size", "9px").style("fill", "#e63946").style("opacity", 0.75)
       .text(c.label);
   });
 
   // Eixos: format("d") exibe anos sem vírgula de milhar (2021, não 2,021)
   g.append("g").attr("transform", `translate(0,${H})`)
-    .call(d3.axisBottom(xScale).tickFormat(d3.format("d"))).attr("class", "x-axis");
+    .call(
+      d3.axisBottom(xScale)
+        .tickValues(TIME_TICKS)
+        .tickFormat(d3.format("d"))
+    ).attr("class", "x-axis");
   g.append("g").call(d3.axisLeft(yScale).tickFormat((v) => `$${v}`)).attr("class", "y-axis");
 
   // Label do eixo Y rotacionado: transform rotate(-90) + translate para centralizar
@@ -205,32 +198,7 @@ async function render() {
       updateFilter({ year: Number(d.year) });
     });
 
-  // Brush horizontal: permite selecionar um subintervalo de anos.
-  // O brush opera em coordenadas de pixel [0, W] x [0, H] e converte para anos
-  // via xScale.invert() antes de propagar para o filterState.
-  const brushInfo = d3.select("#brush-info-food");
-  const brush = d3.brushX()
-    .extent([[0, 0], [W, H]]) // área total disponível para o brush
-    .on("end", function (event) {
-      if (!event.selection) {
-        // Brush limpo (clique sem arrastar) → restaura intervalo completo
-        brushInfo.style("display", "none");
-        const allYears = data.map((d) => d.year);
-        updateFilter({ yearStart: d3.min(allYears), yearEnd: d3.max(allYears) });
-        return;
-      }
-      // Converte pixels selecionados [x0, x1] → anos via escala inversa
-      const [x0, x1] = event.selection.map(xScale.invert);
-      const ys = Math.round(x0), ye = Math.round(x1);
-      brushInfo.style("display", "block")
-        .html(`<strong>Período selecionado:</strong> ${ys} – ${ye} &nbsp;(Gráficos 3 e 4 filtrados)`);
-      // Propaga yearStart/yearEnd → notifica Gráficos 3 e 4 via onFilterChange
-      updateFilter({ yearStart: ys, yearEnd: ye });
-    });
 
-  // O grupo do brush é adicionado por último para capturar eventos de mouse
-  // antes dos elementos de dados (pontos, linha) — sem isso os pontos consomem os eventos.
-  g.append("g").attr("class", "brush").call(brush);
 }
 
 /**

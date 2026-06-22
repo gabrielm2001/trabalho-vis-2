@@ -75,9 +75,10 @@ async function render() {
 
   // Estado inicial: País B ainda não foi selecionado no mapa
   if (!countryB) {
-    const W = svg.node().getBoundingClientRect().width || 400;
-    svg.attr("width", W).attr("height", 200);
-    svg.append("text").attr("x", W / 2).attr("y", 100)
+    const W = svg.node().clientWidth || 400;
+    const containerH = svg.node().clientHeight || 200;
+    svg.attr("width", W).attr("height", containerH);
+    svg.append("text").attr("x", W / 2).attr("y", containerH / 2)
       .attr("text-anchor", "middle").style("fill", "#aaa").style("font-size", "14px")
       .text("Clique em um país no mapa para comparar");
     return;
@@ -113,15 +114,27 @@ async function render() {
 
   const margin = { top: 30, right: 30, bottom: 50, left: 80 };
   const totalW = svg.node().getBoundingClientRect().width || 480;
+
+  // determine container inner height more robustly (account for card padding and heading)
+  const chartEl = svg.node().closest('.chart') || svg.node().parentNode;
+  const chartRect = chartEl.getBoundingClientRect();
+  const cs = window.getComputedStyle(chartEl);
+  const paddingTop = parseFloat(cs.paddingTop) || 0;
+  const paddingBottom = parseFloat(cs.paddingBottom) || 0;
+  const header = svg.node().previousElementSibling;
+  const headerRect = header ? header.getBoundingClientRect() : { height: 0 };
+  const headerMarginBottom = header ? (parseFloat(window.getComputedStyle(header).marginBottom) || 0) : 0;
+
+  const containerInnerH = Math.max(120, chartRect.height - paddingTop - paddingBottom - headerRect.height - headerMarginBottom);
+
   const W = totalW - margin.left - margin.right;
+  // compute row height to fit all rows inside the available inner height
+  const rowH = Math.max(20, Math.floor(containerInnerH / Math.max(1, dumbData.length)));
+  const H = rowH * dumbData.length;
 
-  // Altura calculada dinamicamente: cada linha de ano ocupa rowH pixels.
-  // Dumbbell cresce verticalmente com o número de anos — diferente dos outros
-  // gráficos que têm altura fixa.
-  const rowH = 38;
-  const H = dumbData.length * rowH;
-
-  svg.attr("width", totalW).attr("height", H + margin.top + margin.bottom);
+  // set svg size to match chart inner area (including margins)
+  const svgHeight = Math.max(H + margin.top + margin.bottom, headerRect.height + paddingTop + paddingBottom + 60);
+  svg.attr("width", totalW).attr("height", svgHeight).style("display", "block");
   const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
   const allPrices = dumbData.flatMap((d) => [d.priceA, d.priceB].filter((v) => v !== null));
@@ -215,16 +228,19 @@ async function render() {
     }
   });
 
-  // Legenda acima dos dumbbells: dois itens lado a lado, um por metade da largura
+  // Legenda centralizada
   const legendY = -25;
-  [
+  const legendItems = [
     { label: labelA, color: "#2d7d2d" },
     { label: labelB, color: "#e8a838" },
-  ].forEach((l, i) => {
-    const lx = i * (W / 2);
-    g.append("circle").attr("cx", lx + 8).attr("cy", legendY).attr("r", 7).attr("fill", l.color);
-    g.append("text").attr("x", lx + 20).attr("y", legendY + 4)
-      .style("font-size", "12px").style("fill", "#333").text(l.label);
+  ];
+  const nLeg = legendItems.length;
+  const spacing = W / (nLeg + 1);
+  legendItems.forEach((l, i) => {
+    const cx = spacing * (i + 1);
+    g.append("circle").attr("cx", cx).attr("cy", legendY).attr("r", 7).attr("fill", l.color);
+    g.append("text").attr("x", cx + 12).attr("y", legendY + 4)
+      .attr("text-anchor", "start").style("font-size", "12px").style("fill", "#333").text(l.label);
   });
 }
 

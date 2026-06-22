@@ -1,6 +1,10 @@
 /* ── Reset & Base ─────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 
+:root {
+  --chart-height: 360px; /* altura uniforme para todos os gráficos */
+}
+
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   margin: 0;
@@ -187,7 +191,7 @@ h3 {
 
 #worldmap svg {
   width: 100%;
-  height: 460px;
+  height: var(--chart-height);
   display: block;
 }
 
@@ -223,14 +227,33 @@ h3 {
   cursor: ew-resize;
 }
 
-/* ── Gráficos 3 + 4 lado a lado ─────────────────────── */
+/* ── Gráficos 3 + 4 (3 em cima, 4 embaixo) ───────────── */
 .containerg34 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr; /* sempre empilha: 4 ficará abaixo de 3 */
   gap: 1.5rem;
   width: 100%;
   margin-bottom: 1.5rem;
-  align-items: start;   /* evita esticar o card menor */
+  align-items: stretch;   /* iguala altura dos cards */
+}
+
+/* Garantir que os cards 3 e 4 tenham altura igual e que o SVG fique proporcional dentro do card */
+.containerg34 .chart {
+  height: var(--chart-height);
+  display: flex;
+  flex-direction: column;
+}
+
+.containerg34 .chart h2 {
+  flex: 0 0 auto; /* cabeçalho não cresce */
+  margin-bottom: 0.6rem;
+}
+
+.containerg34 .chart svg {
+  flex: 1 1 auto; /* ocupa o espaço restante */
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 @media (max-width: 960px) {
@@ -241,14 +264,14 @@ h3 {
   width: 100%;
   display: block;
   overflow: visible;
-  min-height: 200px;
+  /* height handled by .containerg34 .chart svg when inside containerg34 */
 }
 
 #chart4 svg {
   width: 100%;
   display: block;
   overflow: visible;
-  min-height: 150px;
+  /* height handled by .containerg34 .chart svg when inside containerg34 */
 }
 
 /* ── Details on Demand ───────────────────────────────── */

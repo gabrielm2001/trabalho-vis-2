@@ -13,14 +13,13 @@ import { executeQuery } from "./dataLoader.js";
 import { filterState, onFilterChange } from "./filterState.js";
 import { getName } from "./countryNames.js";
 
-// Commodities non-food exibidas por padrão.
-// Escolhidas por representar os principais vetores de custo: gasolina (transporte),
-// diesel (logística e maquinário), querosene (cocção), ureia e NPK (fertilizantes).
+const TIME_DOMAIN = [2015, 2026];
+const TIME_TICKS = d3.range(2015, 2027);
+
+// Commodities non-food de interesse — exibidas por padrão
 const NON_FOOD_COMMODITIES = [
   "Fuel (petrol-gasoline)",
   "Fuel (diesel)",
-  "Fertilizer (urea)",
-  "Fertilizer (NPK)",
   "Fuel (kerosene)",
 ];
 
@@ -29,8 +28,6 @@ const NON_FOOD_COMMODITIES = [
 const COMMODITY_COLORS = {
   "Fuel (petrol-gasoline)": "#e63946",
   "Fuel (diesel)":          "#457b9d",
-  "Fertilizer (urea)":      "#2a9d8f",
-  "Fertilizer (NPK)":       "#e9c46a",
   "Fuel (kerosene)":        "#6d4c41",
 };
 
@@ -82,10 +79,13 @@ async function render() {
   // evitando que ela vaze fora do elemento ou sobreponha as linhas.
   const margin = { top: 35, right: 170, bottom: 50, left: 75 };
   const totalW = svg.node().getBoundingClientRect().width || 600;
+  const containerH = svg.node().clientHeight || 380; // read height from CSS-sized container
   const W = Math.max(200, totalW - margin.left - margin.right);
-  const H = 380 - margin.top - margin.bottom;
+  const availableH = Math.max(120, containerH - margin.top - margin.bottom);
+  const H = availableH;
 
-  svg.attr("width", totalW).attr("height", H + margin.top + margin.bottom);
+  // set svg to container height so it fits the card without overflow
+  svg.attr("width", totalW).attr("height", containerH);
   const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
   // d3.group() transforma o array flat em um Map<commodity, rows[]>,
@@ -95,12 +95,12 @@ async function render() {
   if (!raw.length) {
     g.append("text").attr("x", W / 2).attr("y", H / 2)
       .attr("text-anchor", "middle").style("fill", "#aaa")
-      .text("Sem dados non-food para o país/período selecionado");
+      .text("Sem dados de combustíveis para o país/período selecionado");
     return;
   }
 
   const allYears = raw.map((d) => d.year);
-  const xScale = d3.scaleLinear().domain(d3.extent(allYears)).range([0, W]);
+  const xScale = d3.scaleLinear().domain(TIME_DOMAIN).range([0, W]);
   const yScale = d3.scaleLinear()
     .domain([0, d3.max(raw, (d) => +d.avg_price) * 1.12])
     .nice().range([H, 0]);
@@ -113,21 +113,27 @@ async function render() {
 
   // Anotações de crise — exibidas apenas se o ano cair dentro do domínio atual
   CRISES.forEach((c) => {
-    const [y0, y1] = xScale.domain();
+    const [y0, y1] = TIME_DOMAIN;
     if (c.year < y0 || c.year > y1) return;
+    const cx = xScale(c.year);
     g.append("line")
-      .attr("x1", xScale(c.year)).attr("x2", xScale(c.year))
+      .attr("x1", cx).attr("x2", cx)
       .attr("y1", 0).attr("y2", H)
       .attr("stroke", "#aaa").attr("stroke-dasharray", "4,3").attr("stroke-width", 1).attr("opacity", 0.6);
+    // position label with a safety margin from the right edge to avoid overlapping legend
+    const labelPadding = 6;
+    const maxLabelX = W - 60;
+    let labelX = cx + labelPadding;
+    if (labelX > maxLabelX) labelX = cx - 60; // shift left if too close to right edge
     g.append("text")
-      .attr("x", xScale(c.year) + 4).attr("y", 12)
+      .attr("x", labelX).attr("y", 12)
       .style("font-size", "9px").style("fill", "#999").text(c.label);
   });
 
   // Faixa vertical semitransparente destacando o ano selecionado no filterState.
   // Correlaciona visualmente com o ponto vermelho do Gráfico 2.
   const selYear = filterState.year;
-  const [dy0, dy1] = xScale.domain();
+  const [dy0, dy1] = TIME_DOMAIN;
   if (selYear >= dy0 && selYear <= dy1) {
     g.append("rect")
       .attr("x", xScale(selYear) - 6).attr("y", 0)
@@ -136,7 +142,11 @@ async function render() {
   }
 
   g.append("g").attr("transform", `translate(0,${H})`)
-    .call(d3.axisBottom(xScale).tickFormat(d3.format("d")));
+    .call(
+      d3.axisBottom(xScale)
+        .tickValues(TIME_TICKS)
+        .tickFormat(d3.format("d"))
+    );
   g.append("g").call(d3.axisLeft(yScale).tickFormat((v) => `$${v}`));
 
   g.append("text").attr("transform", "rotate(-90)")
@@ -215,19 +225,17 @@ async function render() {
   // legendX = W + 12px (12px de afastamento da área de plotagem).
   // Nomes curtos evitam que a legenda exceda os 170px do margin.right.
   const legendX = W + 12;
+  const legendYStart = 34;
   const shortNames = {
     "Fuel (petrol-gasoline)": "Gasolina",
     "Fuel (diesel)":          "Diesel",
-    "Fertilizer (urea)":      "Ureia",
-    "Fertilizer (NPK)":       "Fert. NPK",
     "Fuel (kerosene)":        "Querosene",
   };
   // Usa a ordem de NON_FOOD_COMMODITIES (não a do Map) para manter a legenda estável
   NON_FOOD_COMMODITIES.forEach((comm, i) => {
     if (!byComm.has(comm)) return; // Pula commodities sem dados no período
     const col = COMMODITY_COLORS[comm] || "#888";
-    const ly = i * 24;
-    // Mini-linha + círculo como ícone da legenda, replicando o visual do gráfico
+    const ly = legendYStart + i * 24;
     g.append("line")
       .attr("x1", legendX).attr("x2", legendX + 14)
       .attr("y1", ly + 2).attr("y2", ly + 2)
