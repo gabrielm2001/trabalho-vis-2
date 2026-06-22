@@ -90,12 +90,18 @@ async function render() {
   CRISES.forEach((c) => {
     const [y0, y1] = TIME_DOMAIN;
     if (c.year < y0 || c.year > y1) return;
+    const cx = xScale(c.year);
     g.append("line")
-      .attr("x1", xScale(c.year)).attr("x2", xScale(c.year))
+      .attr("x1", cx).attr("x2", cx)
       .attr("y1", 0).attr("y2", H)
       .attr("stroke", "#aaa").attr("stroke-dasharray", "4,3").attr("stroke-width", 1).attr("opacity", 0.6);
+    // position label with a safety margin from the right edge to avoid overlapping legend
+    const labelPadding = 6;
+    const maxLabelX = W - 60;
+    let labelX = cx + labelPadding;
+    if (labelX > maxLabelX) labelX = cx - 60; // shift left if too close to right edge
     g.append("text")
-      .attr("x", xScale(c.year) + 4).attr("y", 12)
+      .attr("x", labelX).attr("y", 12)
       .style("font-size", "9px").style("fill", "#999").text(c.label);
   });
 
