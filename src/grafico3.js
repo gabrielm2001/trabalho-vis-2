@@ -56,10 +56,13 @@ async function render() {
 
   const margin = { top: 35, right: 170, bottom: 50, left: 75 };
   const totalW = svg.node().getBoundingClientRect().width || 600;
+  const containerH = svg.node().clientHeight || 380; // read height from CSS-sized container
   const W = Math.max(200, totalW - margin.left - margin.right);
-  const H = 380 - margin.top - margin.bottom;
+  const availableH = Math.max(120, containerH - margin.top - margin.bottom);
+  const H = availableH;
 
-  svg.attr("width", totalW).attr("height", H + margin.top + margin.bottom);
+  // set svg to container height so it fits the card without overflow
+  svg.attr("width", totalW).attr("height", containerH);
   const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
   // Agrupar por commodity

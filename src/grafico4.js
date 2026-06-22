@@ -45,8 +45,9 @@ async function render() {
 
   if (!countryB) {
     const W = svg.node().clientWidth || 400;
-    svg.attr("width", W).attr("height", 200);
-    svg.append("text").attr("x", W / 2).attr("y", 100)
+    const containerH = svg.node().clientHeight || 200;
+    svg.attr("width", W).attr("height", containerH);
+    svg.append("text").attr("x", W / 2).attr("y", containerH / 2)
       .attr("text-anchor", "middle").style("fill", "#aaa").style("font-size", "14px")
       .text("Clique em um país no mapa para comparar");
     return;
@@ -81,11 +82,15 @@ async function render() {
 
   const margin = { top: 30, right: 30, bottom: 50, left: 80 };
   const totalW = svg.node().getBoundingClientRect().width || 480;
+  const containerH = svg.node().clientHeight || 300; // read container height from CSS
   const W = totalW - margin.left - margin.right;
-  const rowH = 38;
-  const H = dumbData.length * rowH;
+  // compute row height to fit all rows inside the container; clamp to reasonable min
+  const availableH = Math.max(120, containerH - margin.top - margin.bottom);
+  const rowH = Math.max(24, Math.floor(availableH / Math.max(1, dumbData.length)));
+  const H = rowH * dumbData.length;
 
-  svg.attr("width", totalW).attr("height", H + margin.top + margin.bottom);
+  // set svg size to match container so nothing overflows the card
+  svg.attr("width", totalW).attr("height", containerH);
   const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
   const allPrices = dumbData.flatMap((d) => [d.priceA, d.priceB].filter((v) => v !== null));
